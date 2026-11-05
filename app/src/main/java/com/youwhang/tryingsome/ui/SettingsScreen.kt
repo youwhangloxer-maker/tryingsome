@@ -22,6 +22,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -42,6 +43,8 @@ import com.youwhang.tryingsome.AppGraph
 import com.youwhang.tryingsome.api.friendlyError
 import com.youwhang.tryingsome.net.BypassMode
 import com.youwhang.tryingsome.net.DnsMode
+import com.youwhang.tryingsome.net.ImageQuality
+import com.youwhang.tryingsome.net.VideoQuality
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,6 +128,43 @@ fun SettingsScreen(onDone: (changed: Boolean) -> Unit) {
             testResult?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(it, style = MaterialTheme.typography.bodyMedium)
+            }
+
+            Divider()
+            Section("이미지 품질")
+            ImageQuality.entries.forEach { q ->
+                RadioRow(
+                    selected = s.imageQuality == q,
+                    title = q.label,
+                    desc = q.desc,
+                    onClick = { s = s.copy(imageQuality = q) },
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Section("동영상 기본 화질")
+            Text(
+                "VPN을 쓸 때는 480p가 가장 빨라요. 게시물 화면에서도 바로 바꿀 수 있어요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            VideoQuality.entries.forEach { q ->
+                RadioRow(
+                    selected = s.videoQuality == q,
+                    title = q.label,
+                    desc = null,
+                    onClick = { s = s.copy(videoQuality = q) },
+                )
+            }
+
+            Divider()
+            Section("본 게시물 기록")
+            var viewedCount by remember { mutableStateOf(AppGraph.viewed.count) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${viewedCount}개를 봤어요", modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = {
+                    AppGraph.viewed.clear()
+                    viewedCount = 0
+                }) { Text("기록 지우기") }
             }
 
             Divider()

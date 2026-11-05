@@ -1,7 +1,14 @@
 package com.youwhang.tryingsome.api
 
+import com.youwhang.tryingsome.net.ImageQuality
+import com.youwhang.tryingsome.net.VideoQuality
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 @Serializable
 data class PostsResponse(val posts: List<Post> = emptyList())
@@ -34,7 +41,14 @@ data class FileInfo(
 data class Preview(val width: Int = 0, val height: Int = 0, val url: String? = null)
 
 @Serializable
-data class Sample(val has: Boolean = false, val width: Int = 0, val height: Int = 0, val url: String? = null)
+data class Sample(
+    val has: Boolean = false,
+    val width: Int = 0,
+    val height: Int = 0,
+    val url: String? = null,
+    // 형식이 바뀐 적이 있어서 직접 해석해요
+    val alternates: JsonElement? = null,
+)
 
 @Serializable
 data class Score(val up: Int = 0, val down: Int = 0, val total: Int = 0)
@@ -96,4 +110,38 @@ fun Post.isBlocked(blacklist: Set<String>): Boolean {
     if (blacklist.isEmpty()) return false
     if ("rating:$rating" in blacklist) return true
     return tags.all().any { it.lowercase() in blacklist }
+}
+
+/** 이미지 품질 설정에 맞는 주소. GIF는 샘플이 정지 이미지라서 항상 원본 */
+fun Post.imageUrl(q: ImageQuality): String? = when {
+    kind == Kind.GIF -> fileUrl()
+    q == ImageQuality.ORIGINAL -> fileUrl() ?: sampleUrl()
+    else -> sampleUrl()
+}
+
+private fun altUrl(e: JsonElement?): String? {
+    val o = e as? JsonObject ?: return null
+    (o["url"] as? JsonPrimitive)?.contentOrNull?.let { return it }
+    val list = (o["urls"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: return null
+    return list.firstOrNull { it.endsWith(".mp4") } ?: list.firstOrNull()
+}
+
+private fun Post.videoSample(key: String): String? {
+    val alt = sample.alternates as? JsonObject ?: return null
+    val samples = alt["samples"] as? JsonObject
+    return altUrl(samples?.get(key)) ?: altUrl(alt[key])
+}
+
+/** 이 동영상에서 고를 수 있는 화질 */
+fun Post.videoQualities(): List<VideoQuality> = buildList {
+    if (videoSample("480p") != null) add(VideoQuality.P480)
+    if (videoSample("720p") != null) add(VideoQuality.P720)
+    add(VideoQuality.ORIGINAL)
+}
+
+/** 원하는 화질이 없으면 그보다 낮은 화질, 그것도 없으면 원본 */
+fun Post.videoUrl(q: VideoQuality): String? = when (q) {
+    VideoQuality.P480 -> videoSample("480p") ?: fileUrl()
+    VideoQuality.P720 -> videoSample("720p") ?: videoSample("480p") ?: fileUrl()
+    VideoQuality.ORIGINAL -> fileUrl()
 }

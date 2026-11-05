@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -74,6 +75,10 @@ import com.youwhang.tryingsome.AppGraph
 import com.youwhang.tryingsome.api.Kind
 import com.youwhang.tryingsome.api.Post
 import com.youwhang.tryingsome.api.fileUrl
+import com.youwhang.tryingsome.api.imageUrl
+import com.youwhang.tryingsome.api.videoQualities
+import com.youwhang.tryingsome.api.videoUrl
+import com.youwhang.tryingsome.net.VideoQuality
 import com.youwhang.tryingsome.api.friendlyError
 import com.youwhang.tryingsome.api.kind
 import com.youwhang.tryingsome.api.previewUrl
@@ -95,7 +100,17 @@ fun PostScreen(vm: MainViewModel, startIndex: Int, onBack: () -> Unit, onTag: (S
     val context = LocalContext.current
 
     LaunchedEffect(pager.currentPage) {
-        if (pager.currentPage >= posts.size - 5) vm.loadMore()
+        val cur = pager.currentPage
+        posts.getOrNull(cur)?.let { AppGraph.viewed.mark(it.id) }
+        if (cur >= posts.size - 5) vm.loadMore()
+        // 다음 이미지 두 장을 미리 받아 둬요
+        val q = AppGraph.settings.imageQuality
+        for (i in cur + 1..cur + 2) {
+            val p = posts.getOrNull(i) ?: continue
+            if (p.kind != Kind.IMAGE) continue
+            val url = p.imageUrl(q) ?: continue
+            AppGraph.loader().enqueue(ImageRequest.Builder(context).data(url).build())
+        }
     }
 
     Scaffold(
@@ -157,7 +172,7 @@ private fun PostPage(post: Post, isCurrent: Boolean, onTag: (String) -> Unit, on
         item {
             when (post.kind) {
                 Kind.IMAGE, Kind.GIF -> {
-                    val url = if (post.kind == Kind.GIF) post.fileUrl() else post.sampleUrl()
+                    val url = post.imageUrl(AppGraph.settings.imageQuality)
                     if (url == null) {
                         Missing(mediaModifier)
                     } else {
@@ -171,17 +186,21 @@ private fun PostPage(post: Post, isCurrent: Boolean, onTag: (String) -> Unit, on
                     }
                 }
                 Kind.VIDEO -> {
-                    val url = post.fileUrl()
-                    when {
-                        url == null -> Missing(mediaModifier)
-                        isCurrent -> VideoPlayer(url, mediaModifier)
-                        else -> AsyncImage(
-                            model = post.sampleUrl(),
-                            imageLoader = AppGraph.loader(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Fit,
-                            modifier = mediaModifier,
-                        )
+                    val quality = AppGraph.settings.videoQuality
+                    val url = post.videoUrl(quality)
+                    Column {
+                        when {
+                            url == null -> Missing(mediaModifier)
+                            isCurrent -> VideoPlayer(url, mediaModifier)
+                            else -> AsyncImage(
+                                model = post.sampleUrl(),
+                                imageLoader = AppGraph.loader(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                modifier = mediaModifier,
+                            )
+                        }
+                        QualityPicker(post, quality)
                     }
                 }
                 Kind.FLASH -> FlashCard(post, Modifier.fillMaxWidth().aspectRatio(ratio.coerceAtLeast(1f)).background(Color.Black))
@@ -270,6 +289,27 @@ private fun PostPage(post: Post, isCurrent: Boolean, onTag: (String) -> Unit, on
 }
 
 @Composable
+private fun QualityPicker(post: Post, current: VideoQuality) {
+    val options = post.videoQualities()
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("화질", style = MaterialTheme.typography.labelLarge)
+        VideoQuality.entries.forEach { q ->
+            val available = q in options
+            FilterChip(
+                selected = q == current,
+                enabled = available,
+                onClick = { AppGraph.update(AppGraph.settings.copy(videoQuality = q)) },
+                label = { Text(q.label) },
+            )
+        }
+    }
+}
+
+@Composable
 private fun Missing(modifier: Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         Text(
@@ -334,6 +374,7 @@ private fun VideoPlayer(url: String, modifier: Modifier) {
     }
     AndroidView(
         factory = { PlayerView(it).apply { this.player = player } },
+        update = { it.player = player },
         modifier = modifier,
     )
 }

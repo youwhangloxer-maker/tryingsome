@@ -12,6 +12,7 @@ import com.youwhang.tryingsome.api.E621Api
 import com.youwhang.tryingsome.net.AppSettings
 import com.youwhang.tryingsome.net.NetFactory
 import com.youwhang.tryingsome.net.SettingsStore
+import com.youwhang.tryingsome.util.ViewedStore
 import okhttp3.OkHttpClient
 
 class App : Application() {
@@ -25,6 +26,8 @@ class App : Application() {
 object AppGraph {
     private lateinit var app: Application
     private lateinit var store: SettingsStore
+    lateinit var viewed: ViewedStore
+        private set
 
     var settings by mutableStateOf(AppSettings())
         private set
@@ -39,11 +42,12 @@ object AppGraph {
         this.app = app
         store = SettingsStore(app)
         settings = store.load()
+        viewed = ViewedStore(app.filesDir)
         rebuild()
     }
 
     fun update(s: AppSettings) {
-        val netChanged = s.copy(blacklist = "", ageConfirmed = false) != settings.copy(blacklist = "", ageConfirmed = false)
+        val netChanged = s.networkKey() != settings.networkKey()
         store.save(s)
         settings = s
         if (netChanged) rebuild()

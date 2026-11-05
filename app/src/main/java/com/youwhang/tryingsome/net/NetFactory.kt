@@ -3,6 +3,7 @@ package com.youwhang.tryingsome.net
 import android.content.Context
 import okhttp3.Cache
 import okhttp3.Credentials
+import okhttp3.Dispatcher
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -48,7 +49,14 @@ object NetFactory {
         val ua = "$USER_AGENT_APP (by ${s.username.ifBlank { "anonymous" }} on e621)"
         val auth = if (s.username.isNotBlank() && s.apiKey.isNotBlank()) Credentials.basic(s.username.trim(), s.apiKey.trim()) else null
 
+        // VPN을 쓰면 요청마다 지연이 커서, 썸네일을 동시에 많이 받도록 늘려요 (기본값은 호스트당 5개)
+        val dispatcher = Dispatcher().apply {
+            maxRequests = 64
+            maxRequestsPerHost = 24
+        }
+
         return base.newBuilder()
+            .dispatcher(dispatcher)
             .cache(cache)
             .socketFactory(FragmentingSocketFactory(s.bypass))
             .dns(createDns(base, s.dns))

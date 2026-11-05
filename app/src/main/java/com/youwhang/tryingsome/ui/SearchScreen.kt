@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -186,6 +189,20 @@ private fun Thumb(post: Post, onClick: () -> Unit) {
                 post.file.ext.uppercase().ifEmpty { "?" },
                 modifier = Modifier.align(Alignment.Center),
                 style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        if (AppGraph.viewed.isViewed(post.id)) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = "봤음",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.align(Alignment.TopStart)
+                    .padding(4.dp)
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(2.dp),
             )
         }
         val badge = when (post.kind) {

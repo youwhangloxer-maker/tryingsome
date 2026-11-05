@@ -9,6 +9,17 @@ enum class BypassMode(val label: String, val desc: String) {
     OFF("끄기", "우회하지 않아요 (VPN을 켜 둘 때)")
 }
 
+enum class ImageQuality(val label: String, val desc: String) {
+    SAMPLE("샘플 (빠름)", "가로 850px 정도로 줄인 이미지. 크게 볼 때만 원본을 받아요"),
+    ORIGINAL("원본", "처음부터 원본 이미지를 받아요 (느림)")
+}
+
+enum class VideoQuality(val label: String) {
+    P480("480p"),
+    P720("720p"),
+    ORIGINAL("원본")
+}
+
 enum class DnsMode(val label: String) {
     CLOUDFLARE("Cloudflare (1.1.1.1)"),
     GOOGLE("Google (8.8.8.8)"),
@@ -24,7 +35,12 @@ data class AppSettings(
     val apiKey: String = "",
     val blacklist: String = "",
     val ageConfirmed: Boolean = false,
+    val imageQuality: ImageQuality = ImageQuality.SAMPLE,
+    val videoQuality: VideoQuality = VideoQuality.P480,
 ) {
+    /** 이 값들이 바뀌면 네트워크를 다시 만들어야 해요 */
+    fun networkKey() = listOf(bypass, dns, safeMode, username.trim(), apiKey.trim())
+
     fun blacklistSet(): Set<String> =
         blacklist.split(Regex("[\\s,]+")).map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
 }
@@ -42,6 +58,8 @@ class SettingsStore(context: Context) {
             apiKey = p.getString("apiKey", "") ?: "",
             blacklist = p.getString("blacklist", "") ?: "",
             ageConfirmed = p.getBoolean("ageConfirmed", false),
+            imageQuality = runCatching { ImageQuality.valueOf(p.getString("imageQuality", null)!!) }.getOrDefault(d.imageQuality),
+            videoQuality = runCatching { VideoQuality.valueOf(p.getString("videoQuality", null)!!) }.getOrDefault(d.videoQuality),
         )
     }
 
@@ -54,6 +72,8 @@ class SettingsStore(context: Context) {
             .putString("apiKey", s.apiKey)
             .putString("blacklist", s.blacklist)
             .putBoolean("ageConfirmed", s.ageConfirmed)
+            .putString("imageQuality", s.imageQuality.name)
+            .putString("videoQuality", s.videoQuality.name)
             .apply()
     }
 }
