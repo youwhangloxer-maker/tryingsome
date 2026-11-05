@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+# CI에서 받아오는 Ruffle 파일
+app/src/main/assets/ruffle/
+build-log.txt
+log.txt
