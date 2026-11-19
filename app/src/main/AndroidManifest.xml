@@ -28,5 +28,10 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation"
             android:exported="false"
             android:screenOrientation="fullSensor" />
+
+        <activity
+            android:name=".video.VideoActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation"
+            android:exported="false" />
     </application>
 </manifest>

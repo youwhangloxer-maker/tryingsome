@@ -37,7 +37,13 @@ class E621Api(private val client: OkHttpClient, private val baseUrl: String) {
             .addQueryParameter("limit", limit.toString())
             .addQueryParameter("page", page.toString())
             .build()
-        return json.decodeFromString(PostsResponse.serializer(), get(url)).posts
+        val body = get(url).trim()
+        // e621은 {"posts":[...]} 형식이었는데, 지금은 [...] 배열로 바로 오기도 해요. 둘 다 처리
+        return if (body.startsWith("[")) {
+            json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(Post.serializer()), body)
+        } else {
+            json.decodeFromString(PostsResponse.serializer(), body).posts
+        }
     }
 
     suspend fun autocomplete(query: String): List<TagSuggestion> {

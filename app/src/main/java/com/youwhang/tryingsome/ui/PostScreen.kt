@@ -2,6 +2,8 @@ package com.youwhang.tryingsome.ui
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -62,12 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.okhttp.OkHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -85,6 +82,9 @@ import com.youwhang.tryingsome.api.previewUrl
 import com.youwhang.tryingsome.api.sampleUrl
 import com.youwhang.tryingsome.flash.FlashActivity
 import com.youwhang.tryingsome.util.Downloader
+import com.youwhang.tryingsome.video.VideoActivity
+import com.youwhang.tryingsome.video.buildPlayer
+import com.youwhang.tryingsome.video.enableDoubleTapSeek
 import kotlinx.coroutines.launch
 
 @kotlin.OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -191,7 +191,7 @@ private fun PostPage(post: Post, isCurrent: Boolean, onTag: (String) -> Unit, on
                     Column {
                         when {
                             url == null -> Missing(mediaModifier)
-                            isCurrent -> VideoPlayer(url, mediaModifier)
+                            isCurrent -> VideoPlayer(url, post.file.width >= post.file.height, mediaModifier)
                             else -> AsyncImage(
                                 model = post.sampleUrl(),
                                 imageLoader = AppGraph.loader(),
@@ -355,26 +355,33 @@ private fun FlashCard(post: Post, modifier: Modifier) {
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun VideoPlayer(url: String, modifier: Modifier) {
+private fun VideoPlayer(url: String, landscape: Boolean, modifier: Modifier) {
     val context = LocalContext.current
-    val player = remember(url) {
-        val dataSource = OkHttpDataSource.Factory(AppGraph.client)
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSource))
-            .build()
-            .apply {
-                setMediaItem(MediaItem.fromUri(url))
-                repeatMode = Player.REPEAT_MODE_ALL
-                playWhenReady = true
-                prepare()
-            }
-    }
+    val player = remember(url) { buildPlayer(context, url) }
     DisposableEffect(player) {
         onDispose { player.release() }
     }
+    // 전체화면에서 돌아오면 그 위치부터 이어서 재생
+    val fullscreen = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val pos = result.data?.getLongExtra(VideoActivity.EXTRA_POSITION, -1L) ?: -1L
+        if (pos >= 0) player.seekTo(pos)
+        player.play()
+    }
     AndroidView(
-        factory = { PlayerView(it).apply { this.player = player } },
-        update = { it.player = player },
+        factory = {
+            PlayerView(it).apply {
+                this.player = player
+                enableDoubleTapSeek()
+            }
+        },
+        update = { view ->
+            view.player = player
+            view.setFullscreenButtonClickListener {
+                val pos = player.currentPosition
+                player.pause()
+                fullscreen.launch(VideoActivity.intent(context, url, pos, landscape))
+            }
+        },
         modifier = modifier,
     )
 }
