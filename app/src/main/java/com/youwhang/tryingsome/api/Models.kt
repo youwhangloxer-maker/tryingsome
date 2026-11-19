@@ -145,3 +145,91 @@ fun Post.videoUrl(q: VideoQuality): String? = when (q) {
     VideoQuality.P720 -> videoSample("720p") ?: videoSample("480p") ?: fileUrl()
     VideoQuality.ORIGINAL -> fileUrl()
 }
+
+// ---- 2026년 11월 e621 새 API 형식 ----
+// posts.json이 [...] 배열로 오고, 파일 정보는 files, 점수는 stats 안에 들어 있어요.
+
+@Serializable
+data class NewPost(
+    val id: Long,
+    val files: NewFiles = NewFiles(),
+    val stats: NewStats = NewStats(),
+    val rating: String = "s",
+    val sources: List<String> = emptyList(),
+    val description: String = "",
+    val tags: JsonElement? = null,
+)
+
+@Serializable
+data class NewFiles(
+    val meta: NewMeta = NewMeta(),
+    val original: NewOriginal = NewOriginal(),
+    val preview: NewImage = NewImage(),
+    val sample: NewImage = NewImage(),
+    val video: JsonElement? = null,
+)
+
+@Serializable
+data class NewMeta(
+    val md5: String? = null,
+    val ext: String = "",
+    val size: Long = 0,
+    @SerialName("has_sample") val hasSample: Boolean = false,
+)
+
+@Serializable
+data class NewOriginal(val width: Int = 0, val height: Int = 0, val url: String? = null)
+
+@Serializable
+data class NewImage(val width: Int = 0, val height: Int = 0, val jpg: String? = null, val webp: String? = null)
+
+@Serializable
+data class NewStats(
+    val score: Score = Score(),
+    @SerialName("fav_count") val favCount: Int = 0,
+)
+
+private fun strings(e: JsonElement?): List<String> =
+    (e as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList()
+
+/** 태그가 그냥 목록이면 전부 '일반'으로, 분류된 객체면 분류대로 */
+fun parseTags(e: JsonElement?): Tags = when (e) {
+    is JsonArray -> Tags(general = strings(e))
+    is JsonObject -> Tags(
+        general = strings(e["general"]),
+        artist = strings(e["artist"]) + strings(e["contributor"]),
+        copyright = strings(e["copyright"]),
+        character = strings(e["character"]),
+        species = strings(e["species"]),
+        meta = strings(e["meta"]),
+        lore = strings(e["lore"]),
+        invalid = strings(e["invalid"]),
+    )
+    else -> Tags()
+}
+
+fun NewPost.toPost(): Post = Post(
+    id = id,
+    file = FileInfo(
+        width = files.original.width,
+        height = files.original.height,
+        ext = files.meta.ext,
+        size = files.meta.size,
+        md5 = files.meta.md5,
+        url = files.original.url,
+    ),
+    preview = Preview(files.preview.width, files.preview.height, files.preview.jpg ?: files.preview.webp),
+    sample = Sample(
+        has = files.meta.hasSample,
+        width = files.sample.width,
+        height = files.sample.height,
+        url = files.sample.jpg ?: files.sample.webp,
+        alternates = files.video,
+    ),
+    score = stats.score,
+    tags = parseTags(tags),
+    rating = rating,
+    favCount = stats.favCount,
+    description = description,
+    sources = sources,
+)

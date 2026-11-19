@@ -6,6 +6,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -36,14 +38,9 @@ class E621Api(private val client: OkHttpClient, private val baseUrl: String) {
             .addQueryParameter("tags", tags)
             .addQueryParameter("limit", limit.toString())
             .addQueryParameter("page", page.toString())
+            .addQueryParameter("mode", "extended") // 새 형식에서 태그 분류를 받기 위해
             .build()
-        val body = get(url).trim()
-        // e621은 {"posts":[...]} 형식이었는데, 지금은 [...] 배열로 바로 오기도 해요. 둘 다 처리
-        return if (body.startsWith("[")) {
-            json.decodeFromString(kotlinx.serialization.builtins.ListSerializer(Post.serializer()), body)
-        } else {
-            json.decodeFromString(PostsResponse.serializer(), body).posts
-        }
+        return parsePosts(get(url))
     }
 
     suspend fun autocomplete(query: String): List<TagSuggestion> {
@@ -56,6 +53,30 @@ class E621Api(private val client: OkHttpClient, private val baseUrl: String) {
         return json.decodeFromString(
             kotlinx.serialization.builtins.ListSerializer(TagSuggestion.serializer()), body
         )
+    }
+
+    /** 옛 형식({"posts":[...]})과 새 형식([...], files/stats) 모두 읽어요. 이상한 게시물 하나 때문에 전체가 실패하지 않게 하나씩 해석 */
+    private fun parsePosts(body: String): List<Post> {
+        val root = json.parseToJsonElement(body)
+        val list = when (root) {
+            is JsonArray -> root
+            is JsonObject -> root["posts"] as? JsonArray ?: JsonArray(emptyList())
+            else -> JsonArray(emptyList())
+        }
+        var firstError: Throwable? = null
+        val posts = list.mapNotNull { el ->
+            runCatching {
+                if ((el as? JsonObject)?.containsKey("files") == true) {
+                    json.decodeFromJsonElement(NewPost.serializer(), el).toPost()
+                } else {
+                    json.decodeFromJsonElement(Post.serializer(), el)
+                }
+            }.onFailure { if (firstError == null) firstError = it }.getOrNull()
+        }
+        if (posts.isEmpty() && list.isNotEmpty()) {
+            throw IOException("e621 응답 형식을 읽지 못했어요: ${firstError?.message ?: "알 수 없는 오류"}")
+        }
+        return posts
     }
 
     private suspend fun get(url: HttpUrl): String {
